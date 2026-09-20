@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>北大楼 · 南京大学鼓楼校区</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#d9e1e5;color:#253740;font:16px system-ui,'Microsoft YaHei',sans-serif}canvas{display:block;width:100%;height:100vh}header{position:fixed;top:24px;left:24px;background:#fffffff0;border-radius:12px;padding:18px 22px;max-width:340px;box-shadow:0 6px 30px #263c4a16}h1{font-size:26px;margin:0 0 6px}p{font-size:14px;line-height:1.6;margin:0;color:#53666e}nav{position:fixed;bottom:24px;left:24px;right:24px;display:flex;gap:8px;flex-wrap:wrap}button{border:1px solid #bbc8cc;border-radius:8px;padding:11px 16px;background:#fff;color:#263b44;font:inherit;cursor:pointer}button[aria-pressed=true]{background:#293f49;color:white}button:focus-visible{outline:3px solid #b38e42;outline-offset:3px}#status{position:fixed;inset:0;display:grid;place-items:center;background:#d9e1e5;z-index:5;padding:24px;text-align:center}#status[hidden]{display:none}details{margin-top:8px;font-size:13px;color:#60727a}summary{cursor:pointer}.hint{position:fixed;right:24px;top:24px;font-size:13px;color:#52636c}@media(max-width:600px){header{top:12px;left:12px;right:12px;max-width:none;padding:12px 16px}h1{font-size:21px}.hint{display:none}nav{bottom:12px;left:12px;right:12px;gap:6px}button{padding:9px 12px;font-size:14px}}
+</style><script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/addons/"}}</script></head>
+<body><div id="status" role="status">正在载入北大楼…</div><header><h1>北大楼</h1><p>南京大学 · 鼓楼校区</p><details><summary>关于这份复原</summary><p>依据南大档案馆平面与立面图制作。部分尺寸、背面和装饰构件仍为估算；爬山虎按照片作季节性示意。</p></details></header><span class="hint">拖动旋转 · 滚轮缩放 · 右键平移</span>
+<nav aria-label="模型视角"><button data-view="aerial" aria-pressed="true">全景</button><button data-view="south" aria-pressed="false">南立面</button><button data-view="tower" aria-pressed="false">塔楼细部</button><button data-view="roof" aria-pressed="false">屋顶</button><button id="ivy" aria-pressed="true">爬山虎</button><button id="rotate" aria-pressed="false">自动环绕</button></nav>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+const status=document.querySelector('#status');
+try{
+const scene=new THREE.Scene();scene.background=new THREE.Color('#d9e1e5');
+const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);renderer.toneMapping=THREE.AgXToneMapping;renderer.toneMappingExposure=.9;document.body.prepend(renderer.domElement);
+const camera=new THREE.PerspectiveCamera(40,innerWidth/innerHeight,.1,1000);const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.minDistance=4;controls.maxDistance=250;controls.maxPolarAngle=Math.PI*.49;controls.autoRotateSpeed=.55;
+const pmrem=new THREE.PMREMGenerator(renderer);const env=new RoomEnvironment();scene.environment=pmrem.fromScene(env,.04).texture;scene.environmentIntensity=.6;env.dispose();pmrem.dispose();
+scene.add(new THREE.HemisphereLight(0xdceaff,0x565142,1.2));const sun=new THREE.DirectionalLight(0xfff1da,2.3);sun.position.set(-35,65,50);scene.add(sun);
+const views={aerial:[[72,53,104],[0,13.8,3]],south:[[0,22,110],[0,13,2]],tower:[[23,36,38],[0,25,6.3075]],roof:[[43,65,18],[0,17,0]]};
+function view(name){camera.position.set(...views[name][0]);controls.target.set(...views[name][1]);controls.update();document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===name)));}view('aerial');
+document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>view(b.dataset.view));
+const response=await fetch('./beidalou_v04.glb.gz');if(!response.ok)throw new Error('模型文件载入失败');const size=Number(response.headers.get('content-length'))||0;const reader=response.body.getReader();const chunks=[];let total=0;while(true){const {done,value}=await reader.read();if(done)break;chunks.push(value);total+=value.length;status.textContent=size?'正在载入北大楼… '+Math.round(total/size*100)+'%':'正在载入北大楼… '+(total/1048576).toFixed(1)+' MB';}
+status.textContent='正在展开三维模型…';const bytes=await new Response(new Blob(chunks).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+const gltf=await new GLTFLoader().parseAsync(bytes,'./');const model=gltf.scene;scene.add(model);const ivy=[];model.traverse(o=>{if(o.name.startsWith('BD_Ivy_'))ivy.push(o)});
+document.querySelector('#ivy').onclick=e=>{const show=e.currentTarget.getAttribute('aria-pressed')!=='true';ivy.forEach(o=>o.visible=show);e.currentTarget.setAttribute('aria-pressed',String(show));};
+document.querySelector('#rotate').onclick=e=>{controls.autoRotate=!controls.autoRotate;e.currentTarget.setAttribute('aria-pressed',String(controls.autoRotate));};
+window.__beidalouQA={loaded:true,ivyGroups:ivy.length,objects:0};model.traverse(()=>window.__beidalouQA.objects++);status.hidden=true;
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+renderer.setAnimationLoop(()=>{controls.update();renderer.render(scene,camera)});
+}catch(error){console.error(error);status.textContent='载入失败：'+error.message+'。请解压全部文件后运行启动脚本，并使用新版 Edge 或 Chrome。';}
+</script></body></html>
+
